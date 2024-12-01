@@ -37,6 +37,7 @@ export default function AnimeIndex() {
   const navigation = useNavigation();
 
   const [anime, setAnime] = useState<AnimeItem[]>(initialAnime);
+  const [animeResult, setAnimeResult] = useState<AnimeItem[]>([])
   const [searchTerm, setSearchTerm] = useState('');
   const [sortState, setSortState] = useState<{
     field: 'year' | 'score' | null;
@@ -51,6 +52,20 @@ export default function AnimeIndex() {
   useEffect(() => {
     setAnime(initialAnime);
   }, [initialAnime]);
+
+  // Debounce for search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        handleSearch();
+      } else {
+        setAnime(initialAnime);
+        setAnimeResult([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, initialAnime]);
 
   const handleSearch = async () => {
     setLoading(true)
@@ -68,6 +83,7 @@ export default function AnimeIndex() {
           `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTerm)}&limit=25`
         );
         const data = await response.json();
+        setAnimeResult(data.data || [])
         setAnime(data.data || []);
         setLoading(false)
       } catch (error) {
@@ -87,13 +103,14 @@ export default function AnimeIndex() {
   const clearSearch = () => {
     setSearchTerm('');
     setAnime(initialAnime);
+    setAnimeResult([])
   };
 
   // Sorting functions
   const handleSort = (field: 'year' | 'score') => {
     const newSortState: { field: 'year' | 'score'; order: 'asc' | 'desc' } = {
       field,
-      order: sortState.field === field && sortState.order === 'asc' ? 'desc' : 'asc', // Enforce strict typing here
+      order: sortState.field === field && sortState.order === 'asc' ? 'desc' : 'asc',
     };
 
     let sortedAnime = [...anime];
@@ -113,7 +130,7 @@ export default function AnimeIndex() {
   };
 
   const clearSorting = () => {
-    setAnime(initialAnime);
+    setAnime(animeResult || anime);
     setSortState({
       field: null,
       order: 'asc',
@@ -215,7 +232,9 @@ export default function AnimeIndex() {
           </div>
         ) : (
           anime.map((item) => (
-            <Card key={item.mal_id} className="w-full overflow-hidden">
+            <Card key={item.mal_id} className="w-full overflow-hidden hover:shadow-lg hover:scale-105 transition-transform duration-300" onClick={() => {
+              window.open(`https://myanimelist.net/anime/${item.mal_id}`, '_blank');
+            }}>
               <CardHeader className="p-2">
                 <CardTitle className="text-sm md:text-base truncate">{item.title}</CardTitle>
               </CardHeader>
