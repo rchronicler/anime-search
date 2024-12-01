@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { json } from '@remix-run/node';
-import { useLoaderData, useNavigate, useNavigation } from '@remix-run/react';
+import { MetaFunction, useLoaderData, useNavigate, useNavigation } from '@remix-run/react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { ChevronUp, ChevronDown, X, Search } from 'lucide-react';
 import { AnimeItem } from '~/types/anime';
 import { bubbleSort, quickSort } from '~/lib/sorting';
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "Anime Search" },
+    { name: "description", content: "Search Anime..." },
+  ];
+};
 
 export const loader = async ({ request }: { request: Request }) => {
   try {
@@ -233,7 +240,7 @@ export default function AnimeIndex() {
           </div>
         ) : (
           anime.map((item) => (
-            <Card key={item.mal_id} className="w-full overflow-hidden hover:shadow-lg hover:scale-105 transition-transform duration-300" onClick={() => {
+            <Card key={item.mal_id} className="w-full overflow-hidden hover:cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-300" onClick={() => {
               window.open(`https://myanimelist.net/anime/${item.mal_id}`, '_blank');
             }}>
               <CardHeader className="p-2">
