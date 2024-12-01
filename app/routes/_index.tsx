@@ -4,7 +4,7 @@ import { useLoaderData, useNavigate, useNavigation } from '@remix-run/react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { ChevronUp, ChevronDown, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, X, Search } from 'lucide-react';
 import { AnimeItem } from '~/types/anime';
 import { bubbleSort, quickSort } from '~/lib/sorting';
 
@@ -45,23 +45,48 @@ export default function AnimeIndex() {
     field: null,
     order: 'asc',
   });
+  const [loading, setLoading] = useState(false);
 
   // Reset anime and sorting when initial data changes
   useEffect(() => {
     setAnime(initialAnime);
   }, [initialAnime]);
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
+    setLoading(true)
+
     const filteredAnime = initialAnime.filter((item) =>
       item.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    setAnime(filteredAnime);
+
+    if (filteredAnime.length > 0) {
+      setAnime(filteredAnime);
+      setLoading(false)
+    } else {
+      try {
+        const response = await fetch(
+          `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchTerm)}&limit=25`
+        );
+        const data = await response.json();
+        setAnime(data.data || []);
+        setLoading(false)
+      } catch (error) {
+        console.error('Error fetching search results:', error);
+        setAnime([]);
+        setLoading(false)
+      }
+    }
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
+    setAnime(initialAnime);
   };
 
   // Sorting functions
@@ -108,7 +133,7 @@ export default function AnimeIndex() {
     }
   };
 
-  const isLoading = navigation.state === 'loading';
+  const isLoading = navigation.state === 'loading' || loading;
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -122,39 +147,53 @@ export default function AnimeIndex() {
       )}
 
       {/* Search and sort */}
-      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4">
-        <Input
-          type="text"
-          placeholder="Search anime..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onKeyDown={handleSearchKeyDown}
-          className="w-full md:flex-grow"
-        />
-        <div className="flex space-x-2">
-          <Button onClick={handleSearch} className="w-full md:w-auto">
-            Search
+      <div className="flex flex-col gap-4 mb-4">
+        <div className='flex-grow flex flex-row gap-2'>
+          <Input
+            type="text"
+            placeholder="Search anime..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            className="w-full flex-grow"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              onClick={clearSearch}
+              className="flex-shrink"
+              title="Clear Search"
+            >
+              <X className='w-4 h-4' />
+            </Button>
+          )}
+          <Button onClick={handleSearch} className="flex-shrink">
+            <Search />
           </Button>
-          <Button
-            variant={sortState.field === 'year' ? 'default' : 'outline'}
-            onClick={() => handleSort('year')}
-            className="w-full md:w-auto flex items-center"
-          >
-            Sort by Year
-            {sortState.field === 'year' && (
-              sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
-            )}
-          </Button>
-          <Button
-            variant={sortState.field === 'score' ? 'default' : 'outline'}
-            onClick={() => handleSort('score')}
-            className="w-full md:w-auto flex items-center"
-          >
-            Sort by Rating
-            {sortState.field === 'score' && (
-              sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
-            )}
-          </Button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-2">
+          <div className='flex gap-2'>
+            <Button
+              variant={sortState.field === 'year' ? 'default' : 'outline'}
+              onClick={() => handleSort('year')}
+              className="w-full md:w-auto flex items-center"
+            >
+              Sort by Year
+              {sortState.field === 'year' && (
+                sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant={sortState.field === 'score' ? 'default' : 'outline'}
+              onClick={() => handleSort('score')}
+              className="w-full md:w-auto flex items-center"
+            >
+              Sort by Rating
+              {sortState.field === 'score' && (
+                sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+          </div>
           {sortState.field !== null && (
             <Button
               variant="outline"
@@ -162,7 +201,7 @@ export default function AnimeIndex() {
               className="w-full md:w-auto flex items-center"
               title="Clear Sorting"
             >
-              <X className="h-4 w-4" />
+              Clear sorting
             </Button>
           )}
         </div>
