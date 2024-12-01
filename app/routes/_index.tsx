@@ -1,138 +1,220 @@
-import type { MetaFunction } from "@remix-run/node";
+import { useState, useEffect } from 'react';
+import { json } from '@remix-run/node';
+import { useLoaderData, useNavigate, useNavigation } from '@remix-run/react';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { ChevronUp, ChevronDown, X } from 'lucide-react';
+import { AnimeItem } from '~/types/anime';
+import { bubbleSort, quickSort } from '~/lib/sorting';
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: "New Remix App" },
-    { name: "description", content: "Welcome to Remix!" },
-  ];
+export const loader = async ({ request }: { request: Request }) => {
+  try {
+    const url = new URL(request.url);
+    const page = url.searchParams.get('page') || '1';
+
+    const response = await fetch(`https://api.jikan.moe/v4/top/anime?page=${page}&limit=25`);
+    const data = await response.json();
+
+    return json({
+      anime: data.data as AnimeItem[],
+      pagination: data.pagination,
+      currentPage: Number(page),
+    });
+  } catch (error) {
+    console.error('Error fetching anime data:', error);
+    return json({
+      anime: [] as AnimeItem[],
+      pagination: { has_next_page: false },
+      currentPage: 1,
+    });
+  }
 };
 
-export default function Index() {
+export default function AnimeIndex() {
+  const { anime: initialAnime, pagination, currentPage } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const navigation = useNavigation();
+
+  const [anime, setAnime] = useState<AnimeItem[]>(initialAnime);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortState, setSortState] = useState<{
+    field: 'year' | 'score' | null;
+    order: 'asc' | 'desc';
+  }>({
+    field: null,
+    order: 'asc',
+  });
+
+  // Reset anime and sorting when initial data changes
+  useEffect(() => {
+    setAnime(initialAnime);
+  }, [initialAnime]);
+
+  const handleSearch = () => {
+    const filteredAnime = initialAnime.filter((item) =>
+      item.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setAnime(filteredAnime);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Sorting functions
+  const handleSort = (field: 'year' | 'score') => {
+    const newSortState: { field: 'year' | 'score'; order: 'asc' | 'desc' } = {
+      field,
+      order: sortState.field === field && sortState.order === 'asc' ? 'desc' : 'asc', // Enforce strict typing here
+    };
+
+    let sortedAnime = [...anime];
+
+    if (field === 'year') {
+      sortedAnime = bubbleSort(sortedAnime, 'year');
+    } else {
+      sortedAnime = quickSort(sortedAnime, 'score');
+    }
+
+    if (newSortState.order === 'desc') {
+      sortedAnime.reverse();
+    }
+
+    setAnime(sortedAnime);
+    setSortState(newSortState);
+  };
+
+  const clearSorting = () => {
+    setAnime(initialAnime);
+    setSortState({
+      field: null,
+      order: 'asc',
+    });
+  };
+
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (pagination.has_next_page) {
+      navigate(`?page=${currentPage + 1}`);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      navigate(`?page=${currentPage - 1}`);
+    }
+  };
+
+  const isLoading = navigation.state === 'loading';
+
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="flex flex-col items-center gap-16">
-        <header className="flex flex-col items-center gap-9">
-          <h1 className="leading text-2xl font-bold text-gray-800 dark:text-gray-100">
-            Welcome to <span className="sr-only">Remix</span>
-          </h1>
-          <div className="h-[144px] w-[434px]">
-            <img
-              src="/logo-light.png"
-              alt="Remix"
-              className="block w-full dark:hidden"
-            />
-            <img
-              src="/logo-dark.png"
-              alt="Remix"
-              className="hidden w-full dark:block"
-            />
+    <div className="container mx-auto px-4 py-6">
+      <h1 className="text-2xl md:text-3xl font-bold mb-4 text-center">Anime Index</h1>
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="text-center py-4">
+          <span className="text-gray-500 text-sm">Loading...</span>
+        </div>
+      )}
+
+      {/* Search and sort */}
+      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4">
+        <Input
+          type="text"
+          placeholder="Search anime..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          onKeyDown={handleSearchKeyDown}
+          className="w-full md:flex-grow"
+        />
+        <div className="flex space-x-2">
+          <Button onClick={handleSearch} className="w-full md:w-auto">
+            Search
+          </Button>
+          <Button
+            variant={sortState.field === 'year' ? 'default' : 'outline'}
+            onClick={() => handleSort('year')}
+            className="w-full md:w-auto flex items-center"
+          >
+            Sort by Year
+            {sortState.field === 'year' && (
+              sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            variant={sortState.field === 'score' ? 'default' : 'outline'}
+            onClick={() => handleSort('score')}
+            className="w-full md:w-auto flex items-center"
+          >
+            Sort by Rating
+            {sortState.field === 'score' && (
+              sortState.order === 'asc' ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />
+            )}
+          </Button>
+          {sortState.field !== null && (
+            <Button
+              variant="outline"
+              onClick={clearSorting}
+              className="w-full md:w-auto flex items-center"
+              title="Clear Sorting"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Anime grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        {isLoading ? (
+          <div className="flex justify-center items-center w-full col-span-full">
+            <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-black"></div>
           </div>
-        </header>
-        <nav className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-gray-200 p-6 dark:border-gray-700">
-          <p className="leading-6 text-gray-700 dark:text-gray-200">
-            What&apos;s next?
-          </p>
-          <ul>
-            {resources.map(({ href, text, icon }) => (
-              <li key={href}>
-                <a
-                  className="group flex items-center gap-3 self-stretch p-3 leading-normal text-blue-700 hover:underline dark:text-blue-500"
-                  href={href}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {icon}
-                  {text}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        ) : (
+          anime.map((item) => (
+            <Card key={item.mal_id} className="w-full overflow-hidden">
+              <CardHeader className="p-2">
+                <CardTitle className="text-sm md:text-base truncate">{item.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-2">
+                <div className="aspect-w-3 aspect-h-4">
+                  <img
+                    src={item.images.jpg.image_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="mt-2 text-xs md:text-sm">
+                  <p>Year: {item.year || 'N/A'}</p>
+                  <p>Rating: {item.score}/10</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* No reulst state*/}
+      {anime.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          No anime found. Try a different search or reset filters.
+        </div>
+      )}
+
+      {/* Pagination controls */}
+      <div className="flex justify-center items-center space-x-4 mt-6">
+        <Button variant="outline" onClick={handlePrevPage} disabled={currentPage === 1}>
+          Previous
+        </Button>
+        <span className="text-sm">Page {currentPage}</span>
+        <Button variant="outline" onClick={handleNextPage} disabled={!pagination.has_next_page}>
+          Next
+        </Button>
       </div>
     </div>
   );
 }
-
-const resources = [
-  {
-    href: "https://remix.run/start/quickstart",
-    text: "Quick Start (5 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M8.51851 12.0741L7.92592 18L15.6296 9.7037L11.4815 7.33333L12.0741 2L4.37036 10.2963L8.51851 12.0741Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/start/tutorial",
-    text: "Tutorial (30 min)",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M4.561 12.749L3.15503 14.1549M3.00811 8.99944H1.01978M3.15503 3.84489L4.561 5.2508M8.3107 1.70923L8.3107 3.69749M13.4655 3.84489L12.0595 5.2508M18.1868 17.0974L16.635 18.6491C16.4636 18.8205 16.1858 18.8205 16.0144 18.6491L13.568 16.2028C13.383 16.0178 13.0784 16.0347 12.915 16.239L11.2697 18.2956C11.047 18.5739 10.6029 18.4847 10.505 18.142L7.85215 8.85711C7.75756 8.52603 8.06365 8.21994 8.39472 8.31453L17.6796 10.9673C18.0223 11.0653 18.1115 11.5094 17.8332 11.7321L15.7766 13.3773C15.5723 13.5408 15.5554 13.8454 15.7404 14.0304L18.1868 16.4767C18.3582 16.6481 18.3582 16.926 18.1868 17.0974Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://remix.run/docs",
-    text: "Remix Docs",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 20 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M9.99981 10.0751V9.99992M17.4688 17.4688C15.889 19.0485 11.2645 16.9853 7.13958 12.8604C3.01467 8.73546 0.951405 4.11091 2.53116 2.53116C4.11091 0.951405 8.73546 3.01467 12.8604 7.13958C16.9853 11.2645 19.0485 15.889 17.4688 17.4688ZM2.53132 17.4688C0.951566 15.8891 3.01483 11.2645 7.13974 7.13963C11.2647 3.01471 15.8892 0.951453 17.469 2.53121C19.0487 4.11096 16.9854 8.73551 12.8605 12.8604C8.73562 16.9853 4.11107 19.0486 2.53132 17.4688Z"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    href: "https://rmx.as/discord",
-    text: "Join Discord",
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="20"
-        viewBox="0 0 24 20"
-        fill="none"
-        className="stroke-gray-600 group-hover:stroke-current dark:stroke-gray-300"
-      >
-        <path
-          d="M15.0686 1.25995L14.5477 1.17423L14.2913 1.63578C14.1754 1.84439 14.0545 2.08275 13.9422 2.31963C12.6461 2.16488 11.3406 2.16505 10.0445 2.32014C9.92822 2.08178 9.80478 1.84975 9.67412 1.62413L9.41449 1.17584L8.90333 1.25995C7.33547 1.51794 5.80717 1.99419 4.37748 2.66939L4.19 2.75793L4.07461 2.93019C1.23864 7.16437 0.46302 11.3053 0.838165 15.3924L0.868838 15.7266L1.13844 15.9264C2.81818 17.1714 4.68053 18.1233 6.68582 18.719L7.18892 18.8684L7.50166 18.4469C7.96179 17.8268 8.36504 17.1824 8.709 16.4944L8.71099 16.4904C10.8645 17.0471 13.128 17.0485 15.2821 16.4947C15.6261 17.1826 16.0293 17.8269 16.4892 18.4469L16.805 18.8725L17.3116 18.717C19.3056 18.105 21.1876 17.1751 22.8559 15.9238L23.1224 15.724L23.1528 15.3923C23.5873 10.6524 22.3579 6.53306 19.8947 2.90714L19.7759 2.73227L19.5833 2.64518C18.1437 1.99439 16.6386 1.51826 15.0686 1.25995ZM16.6074 10.7755L16.6074 10.7756C16.5934 11.6409 16.0212 12.1444 15.4783 12.1444C14.9297 12.1444 14.3493 11.6173 14.3493 10.7877C14.3493 9.94885 14.9378 9.41192 15.4783 9.41192C16.0471 9.41192 16.6209 9.93851 16.6074 10.7755ZM8.49373 12.1444C7.94513 12.1444 7.36471 11.6173 7.36471 10.7877C7.36471 9.94885 7.95323 9.41192 8.49373 9.41192C9.06038 9.41192 9.63892 9.93712 9.6417 10.7815C9.62517 11.6239 9.05462 12.1444 8.49373 12.1444Z"
-          strokeWidth="1.5"
-        />
-      </svg>
-    ),
-  },
-];
