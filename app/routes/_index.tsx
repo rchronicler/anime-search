@@ -130,11 +130,12 @@ export default function AnimeIndex() {
   };
 
   const clearSorting = () => {
-    setAnime(animeResult || anime);
     setSortState({
       field: null,
       order: 'asc',
     });
+
+    setAnime(animeResult.length > 0 ? animeResult : initialAnime);
   };
 
   // Pagination handlers
