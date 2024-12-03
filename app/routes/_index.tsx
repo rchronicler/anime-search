@@ -120,12 +120,13 @@ export default function AnimeIndex() {
       order: sortState.field === field && sortState.order === 'asc' ? 'desc' : 'asc',
     };
 
-    let sortedAnime = [...anime];
+    // Reset anime state to base results (filtered or initial)
+    const sortedAnime = [...(animeResult.length > 0 ? animeResult : initialAnime)];
 
     if (field === 'year') {
-      sortedAnime = bubbleSort(sortedAnime, 'year');
+      bubbleSort(sortedAnime, 'year');
     } else {
-      sortedAnime = quickSort(sortedAnime, 'score');
+      quickSort(sortedAnime, 'score');
     }
 
     if (newSortState.order === 'desc') {
